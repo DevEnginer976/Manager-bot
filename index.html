@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Universal Bot Manager</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="brandicon">◆</div><div><b>BOT MANAGER</b><small>UNIVERSAL CONTROL</small></div></div>
+  <div class="navlabel">WORKSPACE</div>
+  <button class="nav active" data-page="dashboard">▦　Dashboard</button>
+  <button class="nav" data-page="connections">◈　Mis bots</button>
+  <button class="nav" data-page="server">▣　Servidor</button>
+  <div class="sidefoot"><span class="dot"></span> Panel preparado</div>
+</aside>
+<main>
+<header><div><div class="eyebrow">DISCORD MANAGEMENT</div><h1 id="pageTitle">Dashboard</h1></div><div class="userbox" id="userBox"><a class="primary" href="/auth/login">Iniciar sesión con Discord</a></div></header>
+<div id="notice" class="notice hidden"></div>
+<section id="dashboardPage" class="page">
+  <div class="hero"><div><div class="eyebrow">CONTROL CENTER</div><h2>Administra tus bots.<br><span>Desde un solo lugar.</span></h2><p>Conecta bots que administras y controla sus servidores desde este panel.</p><button class="primary" id="goConnect">＋ Conectar un bot</button></div><div class="orb">BOT<br><b>CTRL</b></div></div>
+  <div class="stats">
+    <article class="stat"><small>BOTS REGISTRADOS</small><strong id="botCount">0</strong><span>En tu panel</span></article>
+    <article class="stat"><small>BOTS CONECTADOS</small><strong id="onlineCount">0</strong><span>Sesiones activas</span></article>
+    <article class="stat"><small>PLATAFORMA</small><strong>Discord</strong><span>API oficial</span></article>
+  </div>
+  <div class="sectionhead"><div><h3>Tus conexiones</h3><p>Selecciona un bot para administrar sus servidores.</p></div><button class="secondary" id="goConnect2">＋ Añadir bot</button></div>
+  <div id="botCards" class="botgrid"><div class="empty">Inicia sesión y conecta tu primer bot.</div></div>
+</section>
+<section id="connectionsPage" class="page hidden">
+ <div class="sectionhead"><div><h3>Conectar un bot existente</h3><p>Usa el token de un bot que sea tuyo o que estés autorizado a administrar.</p></div></div>
+ <div class="panel formpanel">
+  <label>Nombre para identificarlo<input id="botLabel" placeholder="Mi bot de moderación"></label>
+  <label>Bot Token <input id="botToken" type="password" autocomplete="off" placeholder="Pega aquí el token privado del bot"></label>
+  <p class="hint">El token se envía directamente al backend por HTTPS y se cifra antes de guardarse. Nunca lo compartas ni lo publiques en GitHub.</p>
+  <button class="primary" id="connectBtn">Conectar y verificar token</button>
+ </div>
+ <div class="sectionhead"><div><h3>Bots conectados</h3><p>Conexiones guardadas en este servidor.</p></div></div><div id="connectionList" class="botgrid"></div>
+</section>
+<section id="serverPage" class="page hidden">
+ <div class="toolbar"><label>Bot<select id="botSelect"><option value="">Selecciona un bot</option></select></label><label>Servidor<select id="guildSelect"><option value="">Selecciona un servidor</option></select></label><button class="secondary" id="refreshGuild">Actualizar</button></div>
+ <div id="guildInfo" class="stats hidden"></div>
+ <div class="tabs"><button class="tab active" data-tab="members">Miembros</button><button class="tab" data-tab="message">Enviar mensaje</button><button class="tab" data-tab="moderation">Moderación</button><button class="tab" data-tab="messages">Mensajes recientes</button></div>
+ <div id="membersTab" class="panel tabpage"><div class="sectionhead"><div><h3>Miembros</h3><p>Listado de hasta 100 miembros por consulta.</p></div><button class="secondary" id="loadMembers">Cargar miembros</button></div><div id="membersList" class="memberlist empty">Selecciona un bot y un servidor.</div></div>
+ <div id="messageTab" class="panel tabpage hidden"><h3>Enviar mensaje como bot</h3><label>Canal de texto<select id="channelSelect"></select></label><label>Mensaje<textarea id="messageContent" maxlength="2000" rows="5" placeholder="Escribe el mensaje que enviará el bot..."></textarea></label><button class="primary" id="sendMessage">Enviar mensaje</button></div>
+ <div id="moderationTab" class="panel tabpage hidden"><h3>Acciones de moderación</h3><p class="hint">Las acciones son reales e irreversibles en algunos casos. Confirma el ID del usuario y el motivo.</p><label>ID del usuario<input id="targetId" placeholder="Discord User ID"></label><label>Motivo<input id="reason" placeholder="Motivo de la acción"></label><div class="actionrow"><button class="danger" id="banBtn">Banear</button><button class="secondary" id="kickBtn">Expulsar</button></div><label>Timeout (minutos, máximo 40320)<input id="timeoutMinutes" type="number" min="1" max="40320" value="10"></label><button class="secondary" id="timeoutBtn">Aplicar timeout</button></div>
+ <div id="messagesTab" class="panel tabpage hidden"><div class="sectionhead"><div><h3>Mensajes recientes</h3><p>Últimos 50 mensajes del canal elegido.</p></div><button class="secondary" id="loadMessages">Cargar</button></div><div id="recentMessages" class="memberlist empty">Selecciona un canal.</div></div>
+</section>
+<footer>Universal Discord Bot Manager · Autohospedado · Respeta los permisos y límites de Discord.</footer>
+</main></div>
+<script src="/app.js"></script></body></html>
