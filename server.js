@@ -41,7 +41,7 @@ const isProd = process.env.NODE_ENV === "production";
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: "32kb" }));
 app.use(session({
-  store: new SQLiteStore({ db: "sessions.sqlite", dir: "./data" }),
+  store: new SQLiteStore({ db: "sessions.sqlite", dir: process.env.DATA_DIR || "./data" }),
   secret: process.env.SESSION_SECRET,
   resave: false, saveUninitialized: false,
   cookie: { httpOnly: true, sameSite: isProd ? "none" : "lax", secure: isProd, maxAge: 8 * 60 * 60 * 1000 }
@@ -230,4 +230,4 @@ app.delete("/api/bots/:botId/guilds/:guildId/messages/:channelId/:messageId", au
 app.use((err,req,res,next)=>{ console.error(err); if(!res.headersSent) res.status(500).json({error:"Operation failed. Check bot permissions, role hierarchy and Discord availability."}); });
 
 const port=Number(process.env.PORT||3000);
-app.listen(port,()=>console.log(`Universal Bot Manager running at ${process.env.BASE_URL||`http://localhost:${port}`}`));
+app.listen(port, "0.0.0.0", ()=>console.log(`Universal Bot Manager running on port ${port}`));

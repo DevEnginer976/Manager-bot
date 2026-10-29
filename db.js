@@ -1,7 +1,8 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
-fs.mkdirSync("./data", { recursive: true });
-export const db = new Database("./data/manager.sqlite");
+const dataDir = process.env.DATA_DIR || "./data";
+fs.mkdirSync(dataDir, { recursive: true });
+export const db = new Database(`${dataDir}/manager.sqlite`);
 db.pragma("journal_mode = WAL");
 db.exec(`
 CREATE TABLE IF NOT EXISTS bots (

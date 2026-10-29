@@ -38,6 +38,7 @@ En las variables del backend configura:
 - `NODE_ENV=production`
 - `SESSION_SECRET`: secreto largo aleatorio.
 - `MASTER_ENCRYPTION_KEY`: exactamente 64 caracteres hexadecimales (32 bytes).
+- `DATA_DIR=/data` para que la base de datos y las sesiones sobrevivan a los despliegues de FadeHost.
 
 Genera un secreto hexadecimal con:
 ```bash
