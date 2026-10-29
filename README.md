@@ -1,66 +1,72 @@
-# Universal Discord Bot Manager
+# Universal Discord Bot Manager — GitHub Pages + backend
 
-Panel autohospedado para conectar y administrar **bots de Discord que tú posees o tienes autorización para gestionar**. Incluye login OAuth2, almacenamiento cifrado de tokens, selección de servidores, miembros, envío de mensajes, lectura/borrado de mensajes, ban, kick y timeout.
+Este repositorio separa el frontend estático (GitHub Pages) del backend Node.js (hosting que ejecute Node.js). GitHub Pages **no ejecuta Node.js**, no guarda tokens de bots y no puede realizar moderación por sí solo.
 
-## Requisitos
-- Node.js 20 o superior.
-- Una aplicación OAuth2 creada en [Discord Developer Portal](https://discord.com/developers/applications).
-- Un servidor con HTTPS para producción.
-- Los bots deben estar añadidos a los servidores que quieras administrar.
+## Estructura
+- `docs/`: frontend publicado por GitHub Pages.
+- `src/`: API y conexión Discord, se ejecutan en el hosting backend.
+- `package.json`: dependencias del backend.
+- `.env.example`: plantilla de configuración; nunca subas `.env`.
 
-## 1. Configurar Discord OAuth2
-En Discord Developer Portal, abre tu aplicación de dashboard (no necesariamente la aplicación de cada bot):
-1. OAuth2 → General.
-2. Copia Client ID y Client Secret.
-3. Añade el Redirect URI exacto: `https://TU-DOMINIO/auth/callback`.
-4. El login solicita `identify` y `guilds`.
+## A. Publicar el frontend en GitHub Pages
+1. Sube todo el contenido del ZIP a la raíz del repositorio, conservando las carpetas `docs/` y `src/`.
+2. Abre GitHub → tu repositorio → **Settings → Pages**.
+3. En **Build and deployment**, elige **Deploy from a branch**.
+4. Branch: `main`; Folder: `/docs`; pulsa **Save**.
+5. Tu web tendrá una URL como `https://TU-USUARIO.github.io/TU-REPOSITORIO/`.
+6. Edita `docs/config.js` y cambia `https://YOUR-BACKEND-DOMAIN` por la URL HTTPS real de tu backend. Guarda y sube el cambio.
 
-La aplicación de dashboard no necesita Public Key para este flujo. La Public Key se utiliza para verificar interacciones HTTP de Discord y no autentica un bot.
+## B. Desplegar el backend
+Necesitas un servicio/servidor que ejecute Node.js 20+ y conserve archivos entre reinicios (SQLite).
+1. Sube el repositorio a un hosting Node.js o despliega el proyecto desde GitHub.
+2. Comando de instalación: `npm install`.
+3. Comando de inicio: `npm start`.
+4. Configura las variables de entorno del apartado C.
+5. Asegúrate de que el hosting tenga disco persistente para `data/manager.sqlite` y `data/sessions.sqlite`.
 
-## 2. Instalar
-```bash
-npm install
-cp .env.example .env
-```
-Genera secretos:
+## C. Crear OAuth2 de Discord
+En Discord Developer Portal crea/elige una aplicación para el login del panel:
+1. Copia **Client ID** y **Client Secret** de OAuth2.
+2. En OAuth2 → Redirects añade exactamente `https://TU-BACKEND-DOMAIN/auth/callback`.
+3. El backend usa scopes `identify` y `guilds`.
+
+En las variables del backend configura:
+- `FRONTEND_URL=https://TU-USUARIO.github.io/TU-REPOSITORIO`
+- `ALLOWED_ORIGIN=https://TU-USUARIO.github.io` (solo el origen, sin la ruta del repositorio)
+- `DISCORD_REDIRECT_URI=https://TU-BACKEND-DOMAIN/auth/callback`
+- `DISCORD_CLIENT_ID` y `DISCORD_CLIENT_SECRET`
+- `NODE_ENV=production`
+- `SESSION_SECRET`: secreto largo aleatorio.
+- `MASTER_ENCRYPTION_KEY`: exactamente 64 caracteres hexadecimales (32 bytes).
+
+Genera un secreto hexadecimal con:
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
-Ejecuta el comando dos veces. Pega un valor en `SESSION_SECRET` (puede ser cualquier secreto largo) y otro de 64 caracteres hexadecimales en `MASTER_ENCRYPTION_KEY`.
+Ejecuta dos veces para obtener valores independientes. No publiques los valores.
 
-Completa las variables de OAuth2 y `BASE_URL` en `.env`.
+## D. Conectar bots
+1. Abre el enlace GitHub Pages.
+2. Inicia sesión con Discord.
+3. Ve a “Mis bots” y pega el token de un bot que controles.
+4. Selecciona el bot y el servidor.
 
-## 3. Ejecutar
-```bash
-npm start
-```
-Abre `http://localhost:3000`.
+El token del bot se cifra en el backend mediante AES-256-GCM. No se guarda en GitHub Pages, `config.js`, HTML ni JavaScript.
 
-## 4. Añadir un bot
-1. Inicia sesión con Discord.
-2. Ve a Mis bots.
-3. Pega el Bot Token de un bot que controles.
-4. El backend intenta iniciar sesión en Discord y valida el token.
-5. Elige el bot y un servidor.
+## Permisos / límites
+- El usuario que inicia sesión debe tener `Manage Server` o `Administrator` en el servidor.
+- El bot necesita permisos propios para cada acción (Ban Members, Kick Members, Moderate Members, Send Messages, Read Message History, Manage Messages).
+- Para listar miembros activa Server Members Intent en Developer Portal del bot.
+- Para leer contenido de mensajes activa Message Content Intent, sujeto a las restricciones de Discord.
+- Discord aplica jerarquía de roles, rate limits e intents privilegiados.
+- El bot opera como bot, no como cuenta humana.
 
-El token se cifra con AES-256-GCM en SQLite. No se devuelve al navegador. No subas `.env`, `data/` ni copias de la base de datos a GitHub.
+## Seguridad
+- Usa HTTPS para frontend y backend.
+- Nunca subas `.env`, la carpeta `data/` ni bases de datos.
+- Mantén `MASTER_ENCRYPTION_KEY` y `SESSION_SECRET` privados y con copias de seguridad seguras. Si pierdes la clave maestra, no podrás descifrar los tokens almacenados.
+- Usa hosting de confianza, restringe acceso y protege Discord con 2FA.
+- Esta es una base funcional inicial, no una auditoría de seguridad ni una plataforma multiusuario lista para vender públicamente. Antes de abrirla al público añade auditoría, límites por usuario, alertas, protección operativa y revisión de seguridad.
 
-## Permisos y límites
-- El usuario del dashboard debe iniciar sesión con Discord y tener `Manage Server` o `Administrator` en el servidor seleccionado.
-- El bot necesita permisos propios: `View Channels`, `Send Messages`, `Read Message History`, `Ban Members`, `Kick Members` y/o `Moderate Members`, según la acción.
-- La jerarquía de roles de Discord también se aplica.
-- El endpoint de miembros requiere habilitar **Server Members Intent** en Developer Portal del bot.
-- La lectura de contenido requiere **Message Content Intent** habilitado en Developer Portal. Discord puede restringir intents privilegiados a bots verificados.
-- Discord impone rate limits y restricciones; no existe garantía de que todas las acciones funcionen en todos los servidores.
-
-## Seguridad de producción
-- Despliega detrás de HTTPS. En producción configura `NODE_ENV=production` y `BASE_URL` con HTTPS.
-- Mantén `.env`, `data/manager.sqlite` y `data/sessions.sqlite` fuera del repositorio.
-- Usa un disco persistente en tu hosting; si se pierde la base de datos, se pierden las conexiones registradas.
-- Restringe el acceso al servidor y protege la cuenta Discord con 2FA.
-- El token del bot equivale a una contraseña: si se filtra, regenera el token en Developer Portal inmediatamente.
-- Para un servicio público multiusuario, añade límites por usuario, auditoría persistente, protección CSRF/origin, gestión de secretos con KMS/Vault, alertas y aislamiento por proceso/contenedor.
-- Esta versión mantiene las conexiones de bots en memoria: al reiniciar el proceso, usa el botón de reconexión o vuelve a conectar desde el backend. La reconexión automática persistente y el escalado horizontal requieren un worker/gestor de procesos adicional.
-
-## Importante
-Un bot actúa como **bot**, no como una cuenta humana. No puede saltarse permisos, jerarquía, restricciones de Discord ni actuar como una cuenta de usuario normal. Nunca pegues un token en un chat, navegador de terceros o repositorio.
+## Nota sobre Public Key
+La Discord Application Public Key verifica firmas de interacciones HTTP de Discord. No sustituye al Bot Token ni al OAuth2 Client Secret. El flujo de este proyecto usa Bot Token para la sesión del bot y OAuth2 para identificar al administrador.

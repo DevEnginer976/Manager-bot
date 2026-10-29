@@ -16,6 +16,26 @@ for (const name of required) if (!process.env[name]) {
   process.exit(1);
 }
 const app = express();
+const frontendUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
+const allowedOrigin = (process.env.ALLOWED_ORIGIN || frontendUrl).replace(/\/$/, "");
+if (!frontendUrl || !allowedOrigin) {
+  console.error("Set FRONTEND_URL and ALLOWED_ORIGIN to your exact GitHub Pages origin.");
+  process.exit(1);
+}
+app.set("trust proxy", 1);
+app.use((req,res,next) => {
+  const origin = req.headers.origin;
+  if (origin && origin.replace(/\/$/, "") !== allowedOrigin) return res.status(403).json({error:"Origin not allowed."});
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 const SQLiteStore = SQLiteStoreFactory(session);
 const isProd = process.env.NODE_ENV === "production";
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -24,7 +44,7 @@ app.use(session({
   store: new SQLiteStore({ db: "sessions.sqlite", dir: "./data" }),
   secret: process.env.SESSION_SECRET,
   resave: false, saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: "lax", secure: isProd, maxAge: 8 * 60 * 60 * 1000 }
+  cookie: { httpOnly: true, sameSite: isProd ? "none" : "lax", secure: isProd, maxAge: 8 * 60 * 60 * 1000 }
 }));
 app.use("/api", rateLimit({ windowMs: 60_000, limit: 100, standardHeaders: true, legacyHeaders: false }));
 app.use(express.static("public"));
@@ -64,11 +84,16 @@ app.get("/auth/callback", async (req,res) => {
     const user = await userRes.json();
     if (!user.id) return res.status(401).send("Could not identify Discord user.");
     req.session.user = { id:user.id, username:user.username, avatar:user.avatar, accessToken:token.access_token };
-    res.redirect("/");
+    res.redirect(frontendUrl + "/");
   } catch (e) { console.error(e); res.status(500).send("Login error."); }
 });
-app.post("/auth/logout", (req,res) => req.session.destroy(() => res.json({ok:true})));
+app.post("/auth/logout", requireFrontendOrigin, (req,res) => req.session.destroy(() => res.json({ok:true})));
 
+function requireFrontendOrigin(req,res,next) {
+  const origin = (req.headers.origin || "").replace(/\/$/, "");
+  if (origin !== allowedOrigin) return res.status(403).json({error:"Request origin rejected."});
+  next();
+}
 function auth(req,res,next) {
   if (!req.session.user) return res.status(401).json({error:"Sign in with Discord first."});
   next();
@@ -105,7 +130,7 @@ app.get("/api/bots", auth, (req,res) => {
   const rows = db.prepare("SELECT id,label,application_id,created_at FROM bots WHERE owner_id=? ORDER BY created_at DESC").all(req.session.user.id);
   res.json(rows.map(b => ({...b, connected:!!clients.get(b.id)?.isReady(), username:clients.get(b.id)?.user?.tag || null})));
 });
-app.post("/api/bots", auth, wrap(async (req,res) => {
+app.post("/api/bots", auth, requireFrontendOrigin, wrap(async (req,res) => {
   const {label, token} = req.body || {};
   if (typeof token !== "string" || token.length < 40 || token.length > 200) return res.status(400).json({error:"Enter a valid bot token."});
   const id = crypto.randomUUID();
@@ -118,12 +143,12 @@ app.post("/api/bots", auth, wrap(async (req,res) => {
     .run(id, req.session.user.id, String(label || client.user.username).slice(0,60), appId, enc.data, enc.iv, enc.tag, new Date().toISOString());
   res.json({ok:true,id,username:client.user.tag});
 }));
-app.delete("/api/bots/:botId", auth, (req,res) => {
+app.delete("/api/bots/:botId", auth, requireFrontendOrigin, (req,res) => {
   const row = db.prepare("SELECT id FROM bots WHERE id=? AND owner_id=?").get(req.params.botId,req.session.user.id);
   if (!row) return res.status(404).json({error:"Bot not found."});
   disconnectBot(row.id); db.prepare("DELETE FROM bots WHERE id=?").run(row.id); res.json({ok:true});
 });
-app.post("/api/bots/:botId/reconnect", auth, wrap(async (req,res) => {
+app.post("/api/bots/:botId/reconnect", auth, requireFrontendOrigin, wrap(async (req,res) => {
   const row = db.prepare("SELECT * FROM bots WHERE id=? AND owner_id=?").get(req.params.botId,req.session.user.id);
   if (!row) return res.status(404).json({error:"Bot not found."});
   const client = await connectBot(row.id,decrypt(row));
@@ -146,7 +171,7 @@ app.get("/api/bots/:botId/guilds/:guildId/members", auth, ownedBot, guildAccess,
   const members=await req.guild.members.fetch({limit:100});
   res.json([...members.values()].map(m=>({id:m.id,username:m.user.username,tag:m.user.tag,avatar:m.user.displayAvatarURL({size:64}),bot:m.user.bot,nickname:m.nickname})));
 }));
-app.post("/api/bots/:botId/guilds/:guildId/messages", auth, ownedBot, guildAccess, wrap(async(req,res)=>{
+app.post("/api/bots/:botId/guilds/:guildId/messages", auth, requireFrontendOrigin, ownedBot, guildAccess, wrap(async(req,res)=>{
   const {channelId,content}=req.body||{};
   if(typeof content!=="string"||!content.trim()||content.length>2000) return res.status(400).json({error:"Message must contain 1–2000 characters."});
   const channel=await req.guild.channels.fetch(channelId);
@@ -156,7 +181,7 @@ app.post("/api/bots/:botId/guilds/:guildId/messages", auth, ownedBot, guildAcces
   const msg=await channel.send({content});
   res.json({ok:true,messageId:msg.id});
 }));
-app.post("/api/bots/:botId/guilds/:guildId/ban", auth, ownedBot, guildAccess, wrap(async(req,res)=>{
+app.post("/api/bots/:botId/guilds/:guildId/ban", auth, requireFrontendOrigin, ownedBot, guildAccess, wrap(async(req,res)=>{
   const {userId,reason}=req.body||{};
   if(!/^\d{17,20}$/.test(String(userId||""))) return res.status(400).json({error:"Invalid Discord user ID."});
   const me=req.guild.members.me;
@@ -167,7 +192,7 @@ app.post("/api/bots/:botId/guilds/:guildId/ban", auth, ownedBot, guildAccess, wr
   await req.guild.members.ban(userId,{reason:String(reason||"Action from Bot Manager").slice(0,480)});
   res.json({ok:true});
 }));
-app.post("/api/bots/:botId/guilds/:guildId/kick", auth, ownedBot, guildAccess, wrap(async(req,res)=>{
+app.post("/api/bots/:botId/guilds/:guildId/kick", auth, requireFrontendOrigin, ownedBot, guildAccess, wrap(async(req,res)=>{
   const {userId,reason}=req.body||{};
   if(!/^\d{17,20}$/.test(String(userId||""))) return res.status(400).json({error:"Invalid Discord user ID."});
   const me=req.guild.members.me;
@@ -176,7 +201,7 @@ app.post("/api/bots/:botId/guilds/:guildId/kick", auth, ownedBot, guildAccess, w
   if(target.id===req.client.user.id || target.roles.highest.position>=me.roles.highest.position) return res.status(400).json({error:"Role hierarchy prevents this action."});
   await target.kick(String(reason||"Action from Bot Manager").slice(0,480)); res.json({ok:true});
 }));
-app.post("/api/bots/:botId/guilds/:guildId/timeout", auth, ownedBot, guildAccess, wrap(async(req,res)=>{
+app.post("/api/bots/:botId/guilds/:guildId/timeout", auth, requireFrontendOrigin, ownedBot, guildAccess, wrap(async(req,res)=>{
   const {userId,minutes,reason}=req.body||{};
   const n=Number(minutes);
   if(!Number.isInteger(n)||n<1||n>40320) return res.status(400).json({error:"Timeout must be between 1 and 40320 minutes."});
@@ -194,7 +219,7 @@ app.get("/api/bots/:botId/guilds/:guildId/messages/:channelId", auth, ownedBot, 
   const msgs=await channel.messages.fetch({limit:50});
   res.json([...msgs.values()].map(m=>({id:m.id,content:m.content,author:m.author.username,createdAt:m.createdAt})));
 }));
-app.delete("/api/bots/:botId/guilds/:guildId/messages/:channelId/:messageId", auth, ownedBot, guildAccess, wrap(async(req,res)=>{
+app.delete("/api/bots/:botId/guilds/:guildId/messages/:channelId/:messageId", auth, requireFrontendOrigin, ownedBot, guildAccess, wrap(async(req,res)=>{
   const channel=await req.guild.channels.fetch(req.params.channelId);
   if(!channel?.isTextBased()||!channel.messages) return res.status(400).json({error:"Not a text channel."});
   const me=req.guild.members.me;
